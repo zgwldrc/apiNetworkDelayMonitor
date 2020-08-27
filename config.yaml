@@ -1,0 +1,4 @@
+apis:
+  huobi: "https://api.huobi.pro/v1/common/currencys"
+  okex: "https://aws.okex.com/api/index/v3/BTC-USD/constituents"
+  bian: "https://api.binance.com/api/v3/exchangeInfo"
