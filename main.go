@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -59,6 +60,7 @@ func main() {
 			prometheus.GaugeOpts{
 				Name:      e.Name,
 				Help:      "",
+				ConstLabels: prometheus.Labels{"region":os.Getenv("REGION")},
 			},
 			e.GaugeFunc,
 		)); err == nil {
