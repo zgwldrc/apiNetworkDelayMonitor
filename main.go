@@ -39,15 +39,15 @@ func init() {
 	}
 	GaugeFuncEntrys = []GaugeFuncEntry{
 		{
-			"network_delay_huobi",
+			"火币",
 			Frame(viper.GetString("apis.huobi")),
 		},
 		{
-			"network_delay_bian",
+			"币安",
 			Frame(viper.GetString("apis.bian")),
 		},
 		{
-			"network_delay_okex",
+			"OKEx",
 			Frame(viper.GetString("apis.okex")),
 		},
 	}
@@ -58,9 +58,9 @@ func main() {
 	for _, e := range GaugeFuncEntrys {
 		if err := prometheus.Register(prometheus.NewGaugeFunc(
 			prometheus.GaugeOpts{
-				Name:      e.Name,
+				Name:      "network_delay",
 				Help:      "",
-				ConstLabels: prometheus.Labels{"region":os.Getenv("REGION")},
+				ConstLabels: prometheus.Labels{"region":os.Getenv("REGION"), "platform": e.Name},
 			},
 			e.GaugeFunc,
 		)); err == nil {
@@ -68,7 +68,6 @@ func main() {
 		}
 	}
 
-	prometheus.NewGaugeVec()
 	http.Handle("/metrics", promhttp.Handler())
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
