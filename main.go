@@ -65,6 +65,8 @@ func main() {
 			fmt.Printf("GaugeFunc '%s' registered.\n", e.Name)
 		}
 	}
+
+	prometheus.NewGaugeVec()
 	http.Handle("/metrics", promhttp.Handler())
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
