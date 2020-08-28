@@ -1,24 +1,23 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"io"
 	"io/ioutil"
-
-	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 )
 
-type Route struct {
-	Path    string
-	Handler http.HandlerFunc
+type GaugeFuncEntry struct {
+	Name    string
+	GaugeFunc func() float64
 }
-type Routes []Route
 
-var MyRoutes Routes
+var GaugeFuncEntrys []GaugeFuncEntry
 
 func init() {
 	viper.SetConfigName("config")                        // name of config file (without extension)
@@ -37,17 +36,17 @@ func init() {
 		}
 
 	}
-	MyRoutes = Routes{
-		Route{
-			"/huobi",
+	GaugeFuncEntrys = []GaugeFuncEntry{
+		{
+			"network_delay_huobi",
 			Frame(viper.GetString("apis.huobi")),
 		},
-		Route{
-			"/bian",
+		{
+			"network_delay_bian",
 			Frame(viper.GetString("apis.bian")),
 		},
-		Route{
-			"/okex",
+		{
+			"network_delay_okex",
 			Frame(viper.GetString("apis.okex")),
 		},
 	}
@@ -55,58 +54,38 @@ func init() {
 
 func main() {
 
-	for _, r := range MyRoutes {
-		http.HandleFunc(r.Path, r.Handler)
+	for _, e := range GaugeFuncEntrys {
+		if err := prometheus.Register(prometheus.NewGaugeFunc(
+			prometheus.GaugeOpts{
+				Name:      e.Name,
+				Help:      "",
+			},
+			e.GaugeFunc,
+		)); err == nil {
+			fmt.Printf("GaugeFunc '%s' registered.\n", e.Name)
+		}
 	}
+	http.Handle("/metrics", promhttp.Handler())
+
 	log.Fatal(http.ListenAndServe(":8080", nil))
 
 }
 
-func Frame(url string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		client := http.DefaultClient
+func Frame(url string) func() float64 {
+	return func() float64 {
 		start := time.Now()
-		res, err := client.Do(req)
+		res, err := http.Get(url)
 		if err != nil {
-			statsFailedResponse := StatsFailedResponse{
-				Target: url,
-				ErrMsg: err.Error(),
-			}
-			respBody, _ := json.MarshalIndent(statsFailedResponse, "", "  ")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(respBody)
-			log.Error(err)
-			return
+			log.Errorf("get %s error: %s", url, err)
+			return -1
 		}
 		end := time.Now()
 		duration := end.Sub(start)
 		if _, err := io.Copy(ioutil.Discard, res.Body); err != nil {
-			log.Fatal(err)
+			log.Errorf("get %s error: %s", url, err)
+			return -1
 		}
 		res.Body.Close()
-		statsResponse := StatsResponse{
-			Target:       url,
-			Milliseconds: duration.Milliseconds(),
-		}
-
-		respBody, _ := json.MarshalIndent(statsResponse, "", "  ")
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(respBody)
+		return float64(duration.Milliseconds())
 	}
-
-}
-
-type StatsResponse struct {
-	Target       string `json:"Target"`
-	Milliseconds int64  `json:"Milliseconds"`
-}
-type StatsFailedResponse struct {
-	Target string `json:"Target"`
-	ErrMsg string `json:"ErrMsg"`
 }
